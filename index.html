@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- Supabase JS v2 -->
-    <script src="https://xuaoanzelcdigkyrkqtp.supabase.co/rest/v1/"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -715,7 +715,7 @@
         const SUPABASE_URL = 'https://xuaoanzelcdigkyrkqtp.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_SUHVcqraNe6EbFNKdppmtA_vH43rJ23';
 
-        const isConfigured = SUPABASE_URL.startsWith('https://xuaoanzelcdigkyrkqtp.supabase.co') && !SUPABASE_ANON_KEY.includes('sb_publishable_SUHVcqraNe6EbFNKdppmtA_vH43rJ23');
+        const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
         let dbClient = null;
 
         if (isConfigured) {
