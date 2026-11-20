@@ -1,0 +1,1948 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Management Aset & Ticketing IT</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- JsBarcode & QRCode.js -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Supabase JS v2 -->
+    <script src="https://xuaoanzelcdigkyrkqtp.supabase.co/rest/v1/"></script>
+
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .card-custom { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .bg-gradient-primary { background: linear-gradient(45deg, #0d6efd, #0dcaf0); color: white; }
+        .bg-gradient-indigo { background: linear-gradient(45deg, #4f46e5, #06b6d4); color: white; }
+        .table-responsive { border-radius: 8px; overflow-x: auto; }
+        .barcode-container { background: #fff; padding: 15px; border: 1px dashed #ccc; text-align: center; }
+        .spec-badge { font-size: 0.75rem; background-color: rgba(255,255,255,0.75); color: #212529; border-radius: 4px; padding: 3px 6px; display: inline-block; margin-top: 3px; border: 1px solid rgba(0,0,0,0.08); }
+        .login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1e21; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .action-btns { display: flex; gap: 4px; justify-content: center; align-items: center; flex-wrap: nowrap; }
+        .nav-pills .nav-link.active { font-weight: 600; box-shadow: 0 2px 6px rgba(13,110,253,0.3); }
+        .notif-item { cursor: pointer; transition: background 0.15s; }
+        .notif-item:hover { background-color: #f8f9fa; }
+        .group-header { cursor: pointer; user-select: none; }
+    </style>
+</head>
+<body>
+
+    <!-- TOAST NOTIFIKASI REALTIME -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer" style="z-index: 1080;"></div>
+
+    <!-- OVERLAY LOGIN -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="card card-custom p-4 shadow-lg" style="max-width: 410px; width: 100%;">
+            <div class="text-center mb-3">
+                <img src="https://bumi-aksara.annarindo.com/uploads/46a0f7_7b1dd49fa1b4471dac_f66e9edd7b.png" alt="Logo Bumi Aksara Group" style="height: 60px; width: auto;">
+                <h4 class="fw-bold mt-2">IT Support & Asset BA</h4>
+                <p class="text-muted small mb-0">Silakan login untuk mengakses sistem</p>
+            </div>
+            <div id="configWarning" class="alert alert-danger small py-2 d-none">
+                <strong>Database belum dikonfigurasi!</strong> Isi <code>SUPABASE_URL</code> dan <code>SUPABASE_ANON_KEY</code> di dalam file <code>index.html</code> terlebih dahulu.
+            </div>
+            <form onsubmit="handleLogin(event)">
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" id="loginUsername" class="form-control" required placeholder="Masukkan Username">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="loginPassword" class="form-control" required placeholder="Masukkan Password">
+                </div>
+                <button type="submit" id="btnLogin" class="btn btn-primary w-100 py-2 fw-bold">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="appContent" style="display: none;">
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-light bg-white mb-4 shadow-sm">
+            <div class="container-fluid px-4">
+                <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                    <img src="https://media.licdn.com/dms/image/v2/C560BAQFbq82wvFz2og/company-logo_200_200/company-logo_200_200/0/1630670816626?e=2147483647&v=beta&t=islmMNoj5aatuVpFz45thEhMMsiAEfaO51gn_l91k7g" alt="Logo" style="height: 46px; width: auto;">
+                    <div>
+                        <div class="fw-bold lh-1">IT Support & Asset</div>
+                        <span class="badge bg-secondary mt-1" id="dbStatusBadge" style="font-size: 0.7rem;">
+                            <i class="bi bi-database me-1"></i>Menghubungkan...
+                        </span>
+                    </div>
+                </a>
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge bg-light text-dark border p-2" id="userRoleBadge">User: -</span>
+
+                    <!-- TOMBOL NOTIFIKASI -->
+                    <button class="btn btn-outline-primary btn-sm position-relative" data-bs-toggle="modal" data-bs-target="#modalNotif" title="Notifikasi Tiket">
+                        <i class="bi bi-bell-fill"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="notifBadge">0</span>
+                    </button>
+
+                    <!-- TOMBOL REFRESH MANUAL -->
+                    <button class="btn btn-outline-secondary btn-sm" onclick="refreshAllData()" title="Muat Ulang Data">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+
+                    <!-- KHUSUS ADMIN -->
+                    <button class="btn btn-warning btn-sm admin-only fw-bold" data-bs-toggle="modal" data-bs-target="#modalUsers">
+                        <i class="bi bi-people-fill me-1"></i> Kelola User
+                    </button>
+
+                    <button class="btn btn-outline-danger btn-sm" onclick="handleLogout()">
+                        <i class="bi bi-box-arrow-right me-1"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid px-4">
+            <!-- NAVIGASI TAB -->
+            <ul class="nav nav-pills mb-4 gap-2" id="navTabs">
+                <li class="nav-item admin-only" id="tabAssetItem">
+                    <button class="nav-link active" id="tabAssetBtn" onclick="switchTab('assets')">
+                        <i class="bi bi-pc-display me-1"></i> Manajemen Aset IT
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" id="tabTicketBtn" onclick="switchTab('tickets')">
+                        <i class="bi bi-ticket-perforated-fill me-1"></i> Tiket Pengajuan IT Support
+                        <span class="badge bg-danger ms-1 d-none" id="ticketPendingTabBadge">0</span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- =================================================== -->
+            <!-- SECTION 1: MANAJEMEN ASET IT (KHUSUS ADMIN ONLY)    -->
+            <!-- =================================================== -->
+            <div id="sectionAssets" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-box-seam me-2 text-primary"></i>Daftar Aset IT</h5>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-primary btn-sm fw-bold" onclick="openAddAssetModal()">
+                            <i class="bi bi-plus-circle me-1"></i> Tambah Aset
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalImport">
+                            <i class="bi bi-file-earmark-spreadsheet-fill me-1"></i> Import Excel
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="exportToExcel()">
+                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Ekspor Excel Aset
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="clearAllData()">
+                            <i class="bi bi-trash-fill me-1"></i> Reset Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stat Cards Aset -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 bg-gradient-primary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-white-50">Total Aset</h6>
+                                    <h2 class="mb-0 fw-bold text-white" id="totalAsetCount">0</h2>
+                                </div>
+                                <i class="bi bi-box-seam fs-1 opacity-50 text-white"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 border-start border-success border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-muted">Aset Aktif / Normal</h6>
+                                    <h2 class="mb-0 fw-bold text-success" id="aktifCount">0</h2>
+                                </div>
+                                <i class="bi bi-check-circle fs-1 text-success opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 border-start border-warning border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-muted">Perbaikan / Rusak</h6>
+                                    <h2 class="mb-0 fw-bold text-warning" id="perbaikanCount">0</h2>
+                                </div>
+                                <i class="bi bi-tools fs-1 text-warning opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 border-start border-danger border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-muted">Total Nilai Sisa Aset</h6>
+                                    <h4 class="mb-0 fw-bold text-danger" id="totalNilaiAset">Rp 0</h4>
+                                </div>
+                                <i class="bi bi-currency-dollar fs-1 text-danger opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters & Mode Grup -->
+                <div class="card card-custom mb-4 p-3 border-top border-primary border-3">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-3">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                <input type="text" id="searchInput" class="form-control" placeholder="Cari Aset, User, S/N, Spek..." oninput="applyAssetFilters()">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <select id="filterDivisi" class="form-select" onchange="applyAssetFilters()">
+                                <option value="">Semua Grup / Perwakilan</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select id="filterKategori" class="form-select" onchange="applyAssetFilters()">
+                                <option value="">Semua Kategori</option>
+                                <option value="Laptop">Laptop</option>
+                                <option value="PC Desktop">PC Desktop</option>
+                                <option value="Monitor">Monitor</option>
+                                <option value="Printer">Printer</option>
+                                <option value="Network">Network</option>
+                                <option value="Lainnya">Lainnya</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select id="filterStatus" class="form-select" onchange="applyAssetFilters()">
+                                <option value="">Semua Status</option>
+                                <option value="Digunakan">Digunakan</option>
+                                <option value="Tersedia">Tersedia</option>
+                                <option value="Perbaikan">Perbaikan</option>
+                                <option value="Rusak">Rusak</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check form-switch d-flex align-items-center justify-content-md-end gap-2 mb-0">
+                                <input class="form-check-input" type="checkbox" id="toggleGroupMode" onchange="applyAssetFilters()">
+                                <label class="form-check-label fw-semibold small" for="toggleGroupMode">Mode Grup</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tampilan Tabel Biasa -->
+                <div id="tableViewContainer" class="card card-custom p-0 mb-4 shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="assetTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th class="ps-3">Kode</th>
+                                    <th>Nama Barang</th>
+                                    <th>Pengguna & Grup/Perwakilan</th>
+                                    <th>Spesifikasi Hardware</th>
+                                    <th>Status</th>
+                                    <th>Nilai Sisa</th>
+                                    <th class="text-center pe-3" style="min-width: 150px;">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tampilan Mode Grup -->
+                <div id="groupViewContainer" class="mb-4 d-none"></div>
+            </div>
+
+            <!-- =================================================== -->
+            <!-- SECTION 2: TICKETING IT SUPPORT (ADMIN & PERWAKILAN)-->
+            <!-- =================================================== -->
+            <div id="sectionTickets" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <div>
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-headset me-2 text-primary"></i>Tiket Pengajuan & Laporan IT Support
+                        </h5>
+                        <small class="text-muted" id="ticketScopeHint">Pantau dan laporkan kendala IT secara real-time</small>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button class="btn btn-primary btn-sm fw-bold" onclick="openNewTicketModal()">
+                            <i class="bi bi-plus-circle me-1"></i> Buat Tiket Pengajuan
+                        </button>
+                        <button class="btn btn-success btn-sm" onclick="exportTicketsToExcel()">
+                            <i class="bi bi-file-earmark-excel-fill me-1"></i> Ekspor Laporan Tiket (.xlsx)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stat Cards Tiket -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 bg-gradient-indigo">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-white-50">Total Tiket</h6>
+                                    <h2 class="mb-0 fw-bold text-white" id="tktTotalCount">0</h2>
+                                </div>
+                                <i class="bi bi-ticket-detailed fs-1 opacity-50 text-white"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 border-start border-danger border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-muted">Belum Dikerjakan</h6>
+                                    <h2 class="mb-0 fw-bold text-danger" id="tktPendingCount">0</h2>
+                                </div>
+                                <i class="bi bi-exclamation-circle fs-1 text-danger opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 border-start border-warning border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-muted">Sedang Diproses</h6>
+                                    <h2 class="mb-0 fw-bold text-warning" id="tktProcessCount">0</h2>
+                                </div>
+                                <i class="bi bi-hourglass-split fs-1 text-warning opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card card-custom p-3 border-start border-success border-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-0 text-muted">Sudah Selesai</h6>
+                                    <h2 class="mb-0 fw-bold text-success" id="tktDoneCount">0</h2>
+                                </div>
+                                <i class="bi bi-check2-all fs-1 text-success opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Tiket -->
+                <div class="card card-custom mb-4 p-3 border-top border-info border-3">
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                                <input type="text" id="tktSearchInput" class="form-control" placeholder="Cari Kode Tiket, Pelapor, Kendala..." oninput="renderTicketsTable()">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <select id="tktFilterBranch" class="form-select" onchange="renderTicketsTable()">
+                                <option value="">Semua Perwakilan / Grup</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select id="tktFilterStatus" class="form-select" onchange="renderTicketsTable()">
+                                <option value="">Semua Status</option>
+                                <option value="Belum Dikerjakan">Belum Dikerjakan</option>
+                                <option value="Sedang Diproses">Sedang Diproses</option>
+                                <option value="Selesai">Selesai</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabel Tiket -->
+                <div class="card card-custom p-0 mb-4 shadow-sm">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th class="ps-3">Kode & Tanggal</th>
+                                    <th>Pelapor & Perwakilan</th>
+                                    <th>Kategori & Kendala</th>
+                                    <th>Prioritas</th>
+                                    <th>Status</th>
+                                    <th>Penanganan IT</th>
+                                    <th class="text-center pe-3">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ticketTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SARAN GRUP / PERWAKILAN -->
+    <datalist id="branchSuggestions">
+        <option value="Sumut PTU">
+        <option value="Pusat / HO">
+        <option value="IT">
+        <option value="Finance">
+        <option value="HRD">
+    </datalist>
+
+    <!-- MODAL NOTIFIKASI TIKET -->
+    <div class="modal fade" id="modalNotif" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-bell-fill text-warning me-2"></i>Notifikasi Status Tiket</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-3" id="notifListContainer"></div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BUAT TIKET PENGAJUAN -->
+    <div class="modal fade" id="modalTicket" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-ticket-perforated me-2"></i>Buat Tiket Pengajuan IT Support</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formTicket" onsubmit="submitTicket(event)">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Nama Pelapor</label>
+                                <input type="text" id="tktReporter" class="form-control" required placeholder="Nama lengkap pelapor">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Perwakilan / Cabang / Divisi</label>
+                                <input type="text" id="tktBranch" list="branchSuggestions" class="form-control" required placeholder="Contoh: Sumut PTU">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Kategori Kendala</label>
+                                <select id="tktCategory" class="form-select" required>
+                                    <option value="Hardware (PC/Laptop)">Hardware (PC/Laptop)</option>
+                                    <option value="Jaringan / Internet">Jaringan / Internet</option>
+                                    <option value="Software / Aplikasi">Software / Aplikasi</option>
+                                    <option value="Printer / Scanner">Printer / Scanner</option>
+                                    <option value="Email / Akun / Akses">Email / Akun / Akses</option>
+                                    <option value="Lainnya">Lainnya</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Prioritas</label>
+                                <select id="tktPriority" class="form-select" required>
+                                    <option value="Normal">Normal</option>
+                                    <option value="Tinggi (Urgent)">Tinggi (Urgent)</option>
+                                    <option value="Rendah">Rendah</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Judul Kendala / Pengajuan</label>
+                                <input type="text" id="tktTitle" class="form-control" required placeholder="Contoh: Printer tidak bisa mencetak / WiFi kantor putus">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Detail / Kronologi Masalah</label>
+                                <textarea id="tktDescription" class="form-control" rows="4" required placeholder="Jelaskan kendala, pesan error, atau perangkat yang bermasalah..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" id="btnSubmitTicket" class="btn btn-primary fw-bold"><i class="bi bi-send-fill me-1"></i> Kirim Tiket</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DETAIL & PROSES TIKET -->
+    <div class="modal fade" id="modalTicketDetail" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-clipboard2-check me-2"></i>Detail & Penanganan Tiket</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4" id="ticketDetailContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL VIEW DETAIL ASET -->
+    <div class="modal fade" id="modalView" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-laptop me-2"></i>Detail Rincian Aset</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4" id="viewModalContent"></div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL HASIL SCAN MOBILE -->
+    <div class="modal fade" id="modalPublicScan" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-qr-code-scan text-primary me-2"></i>Informasi Aset IT</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 text-center" id="publicScanModalContent"></div>
+                <div class="modal-footer justify-content-center bg-light">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH / EDIT ASET -->
+    <div class="modal fade" id="modalTambah" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="modalTitle">Tambah Aset Baru</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="formAset" onsubmit="saveAsset(event)">
+                    <div class="modal-body">
+                        <input type="hidden" id="assetId">
+
+                        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle me-1"></i> Informasi Umum & Pengguna</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Nama Barang / Aset <span class="text-danger">*</span></label>
+                                <input type="text" id="name" class="form-control" required placeholder="Contoh: PC Desktop Core i7">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Kategori</label>
+                                <select id="category" class="form-select" required>
+                                    <option value="Laptop">Laptop</option>
+                                    <option value="PC Desktop">PC Desktop</option>
+                                    <option value="Monitor">Monitor</option>
+                                    <option value="Printer">Printer</option>
+                                    <option value="Network">Network</option>
+                                    <option value="Lainnya">Lainnya</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Serial Number (S/N)</label>
+                                <input type="text" id="serialNumber" class="form-control" placeholder="SN-99812739">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Nama Pengguna (User)</label>
+                                <input type="text" id="user" class="form-control" placeholder="Nama User">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Grup / Perwakilan / Divisi</label>
+                                <input type="text" id="division" list="branchSuggestions" class="form-control" placeholder="Contoh: Sumut PTU / Finance">
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-cpu me-1"></i> Spesifikasi Hardware & Monitor</h6>
+                        <div class="row g-3 mb-4 p-3 bg-light rounded border">
+                            <div class="col-md-4">
+                                <label class="form-label">Versi Windows / OS</label>
+                                <input type="text" id="osVersion" class="form-control" placeholder="Windows 10/11">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Motherboard (Mobo)</label>
+                                <input type="text" id="motherboard" class="form-control" placeholder="ASUS / MSI / Dell">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">RAM</label>
+                                <input type="text" id="ram" class="form-control" placeholder="8 GB / 16 GB">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Kapasitas SSD</label>
+                                <input type="text" id="ssd" class="form-control" placeholder="256 GB NVMe">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Kapasitas HDD</label>
+                                <input type="text" id="hdd" class="form-control" placeholder="1 TB SATA">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Merk Monitor</label>
+                                <input type="text" id="monitorBrand" class="form-control" placeholder="LG / Dell / Samsung">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Ukuran Monitor (Inch)</label>
+                                <input type="text" id="monitorSize" class="form-control" placeholder="24 Inch">
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-card-checklist me-1"></i> Kondisi & Nilai Aset</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Status Monitoring</label>
+                                <select id="status" class="form-select fw-bold" required>
+                                    <option value="Digunakan">Digunakan (Hijau)</option>
+                                    <option value="Tersedia">Tersedia (Biru)</option>
+                                    <option value="Perbaikan">Perbaikan (Kuning)</option>
+                                    <option value="Rusak">Rusak Total (Merah)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Kondisi Fisik</label>
+                                <select id="condition" class="form-select" required>
+                                    <option value="Baik">Baik</option>
+                                    <option value="Normal">Normal</option>
+                                    <option value="Perlu Perbaikan">Perlu Perbaikan</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Harga Beli (Rp)</label>
+                                <input type="number" id="price" class="form-control" placeholder="Harga Beli">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Tanggal Pembelian</label>
+                                <input type="date" id="buyDate" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Garansi / Umur Aset (Tahun)</label>
+                                <input type="number" id="usefulLife" class="form-control" value="4">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary fw-bold" id="btnSaveAsset">Simpan Data</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL KELOLA USER (ADMIN & PERWAKILAN) -->
+    <div class="modal fade" id="modalUsers" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title fw-bold text-dark"><i class="bi bi-people me-2"></i>Manajemen User & Perwakilan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <form id="formAddUser" onsubmit="addUser(event)" class="mb-4 p-3 bg-light rounded border">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <input type="text" id="newUsername" class="form-control" placeholder="Username" required>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="password" id="newPassword" class="form-control" placeholder="Password" required>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" id="newBranch" list="branchSuggestions" class="form-control" placeholder="Perwakilan (misal: Sumut PTU)">
+                            </div>
+                            <div class="col-md-3">
+                                <select id="newRole" class="form-select" required>
+                                    <option value="user">Perwakilan (Hanya Tiket)</option>
+                                    <option value="admin">Admin IT (Full Akses)</option>
+                                </select>
+                            </div>
+                            <div class="col-12 mt-2">
+                                <button type="submit" class="btn btn-success w-100 fw-bold">+ Tambah Akun ke Database</button>
+                            </div>
+                        </div>
+                    </form>
+                    <h6 class="fw-bold text-muted">Daftar Akun Terdaftar:</h6>
+                    <ul class="list-group" id="userListGroup"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL IMPORT EXCEL -->
+    <div class="modal fade" id="modalImport" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Import Data Aset Excel</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Pilih File Excel (.xlsx / .xls / .csv):</label>
+                        <input type="file" id="excelFileInput" class="form-control" accept=".xlsx, .xls, .csv">
+                    </div>
+                    <div class="alert alert-info p-2 small text-center mb-0">
+                        <a href="#" onclick="downloadTemplate(); return false;" class="fw-bold text-decoration-none">
+                            <i class="bi bi-download me-1"></i> Download Format Template Excel
+                        </a>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" id="btnImportExcel" class="btn btn-success fw-bold" onclick="processExcelImport()">Proses Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BARCODE & QR -->
+    <div class="modal fade" id="modalBarcode" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Label Barcode & QR Code</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center p-4" id="printableArea">
+                    <div style="border: 2px dashed #0d6efd; border-radius: 12px; padding: 15px; background: #fff; max-width: 380px; margin: 0 auto;">
+                        <h5 id="barcodeAssetName" class="fw-bold text-dark mb-1"></h5>
+                        <p id="barcodeAssetUser" class="text-muted small mb-2"></p>
+                        <div class="barcode-container mb-3 border-0 p-0"><svg id="barcodeCanvas"></svg></div>
+                        <div class="d-flex justify-content-center mb-2"><div id="qrcodeCanvas"></div></div>
+                        <span class="badge bg-dark" id="barcodeAssetCode"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    <button type="button" class="btn btn-primary fw-bold" onclick="printBarcode()"><i class="bi bi-printer me-1"></i> Cetak Label</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ==========================================
+        // KONFIGURASI SUPABASE (GANTI 2 BARIS INI)
+        // ==========================================
+        const SUPABASE_URL = 'TEMPEL_PROJECT_URL_DISINI';
+        const SUPABASE_ANON_KEY = 'TEMPEL_ANON_KEY_DISINI';
+
+        const isConfigured = SUPABASE_URL.startsWith('https://') && !SUPABASE_ANON_KEY.includes('TEMPEL_');
+        let dbClient = null;
+
+        if (isConfigured) {
+            dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } else {
+            document.getElementById('configWarning').classList.remove('d-none');
+        }
+
+        let currentUser = JSON.parse(sessionStorage.getItem('it_current_user')) || null;
+        let appUsers = [];
+        let assets = [];
+        let tickets = [];
+        let realtimeChannel = null;
+
+        // ==========================================
+        // HELPER
+        // ==========================================
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[m]));
+        }
+
+        function setDbStatus(ok, text) {
+            const badge = document.getElementById('dbStatusBadge');
+            if (!badge) return;
+            badge.className = `badge mt-1 ${ok ? 'bg-success' : 'bg-danger'}`;
+            badge.innerHTML = `<i class="bi bi-${ok ? 'database-check' : 'database-x'} me-1"></i>${text}`;
+        }
+
+        function showToast(title, message, type = 'primary') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const id = 'toast_' + Date.now() + Math.floor(Math.random() * 100);
+            const html = `
+                <div id="${id}" class="toast align-items-center text-bg-${type} border-0 shadow" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${escapeHtml(title)}</strong><br>${escapeHtml(message)}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>`;
+            container.insertAdjacentHTML('beforeend', html);
+            const el = document.getElementById(id);
+            new bootstrap.Toast(el, { delay: 5000 }).show();
+            el.addEventListener('hidden.bs.toast', () => el.remove());
+        }
+
+        function formatDateTime(isoStr) {
+            if (!isoStr) return '-';
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return isoStr;
+            return d.toLocaleString('id-ID', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function formatRupiah(num) {
+            if (isNaN(num) || num === null || num === undefined) return 'Rp 0';
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+        }
+
+        function calculateDepreciation(price, buyDate, usefulLifeYears) {
+            const parsedPrice = parseFloat(price) || 0;
+            if (!parsedPrice) return 0;
+            if (!buyDate) return parsedPrice;
+            const buyYear = new Date(buyDate).getFullYear();
+            if (isNaN(buyYear)) return parsedPrice;
+            const age = Math.max(0, new Date().getFullYear() - buyYear);
+            const life = parseInt(usefulLifeYears) || 0;
+            if (life <= 0 || age >= life) return 0;
+            return Math.max(0, parsedPrice - ((parsedPrice / life) * age));
+        }
+
+        // ==========================================
+        // AUTENTIKASI & PEMISAHAN HAK AKSES
+        // ==========================================
+        async function handleLogin(e) {
+            e.preventDefault();
+            if (!dbClient) {
+                alert('Isi SUPABASE_URL dan SUPABASE_ANON_KEY terlebih dahulu di file index.html!');
+                return;
+            }
+
+            const btn = document.getElementById('btnLogin');
+            btn.disabled = true;
+            btn.innerText = 'Memeriksa...';
+
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value;
+
+            try {
+                const { data, error } = await dbClient
+                    .from('app_users')
+                    .select('*')
+                    .eq('username', u)
+                    .eq('password', p)
+                    .maybeSingle();
+
+                if (error) throw error;
+
+                if (data) {
+                    currentUser = data;
+                    sessionStorage.setItem('it_current_user', JSON.stringify(data));
+                    document.getElementById('loginPassword').value = '';
+                    await checkAuth();
+                } else {
+                    alert('Username atau password salah!');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Gagal terhubung ke database Supabase.\nPastikan URL, API Key, dan skrip SQL sudah dijalankan.\nDetail: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Login';
+            }
+        }
+
+        function handleLogout() {
+            stopRealtime();
+            sessionStorage.removeItem('it_current_user');
+            currentUser = null;
+            assets = [];
+            tickets = [];
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('appContent').style.display = 'none';
+        }
+
+        async function checkAuth() {
+            if (!currentUser || !dbClient) {
+                document.getElementById('loginOverlay').style.display = 'flex';
+                document.getElementById('appContent').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('appContent').style.display = 'block';
+
+            const isAdmin = currentUser.role === 'admin';
+            const branchLabel = currentUser.branch ? ` • ${currentUser.branch}` : '';
+            document.getElementById('userRoleBadge').innerText = `${currentUser.username} (${isAdmin ? 'ADMIN IT' : 'PERWAKILAN'}${branchLabel})`;
+
+            document.querySelectorAll('.admin-only').forEach(el => {
+                el.style.display = isAdmin ? '' : 'none';
+            });
+
+            if (isAdmin) {
+                document.getElementById('ticketScopeHint').innerText = 'Semua tiket laporan IT dari seluruh perwakilan & divisi';
+                switchTab('assets');
+            } else {
+                // PERWAKILAN: Aset disembunyikan & tidak dimuat sama sekali
+                document.getElementById('sectionAssets').style.display = 'none';
+                document.getElementById('ticketScopeHint').innerText = `Menampilkan tiket pengajuan untuk: ${currentUser.branch || currentUser.username}`;
+                switchTab('tickets');
+            }
+
+            await refreshAllData();
+            setupRealtime();
+        }
+
+        function switchTab(tab) {
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            if (tab === 'assets' && !isAdmin) tab = 'tickets';
+
+            document.getElementById('sectionAssets').style.display = (tab === 'assets' && isAdmin) ? 'block' : 'none';
+            document.getElementById('sectionTickets').style.display = (tab === 'tickets') ? 'block' : 'none';
+
+            document.getElementById('tabAssetBtn').classList.toggle('active', tab === 'assets');
+            document.getElementById('tabTicketBtn').classList.toggle('active', tab === 'tickets');
+        }
+
+        async function refreshAllData() {
+            if (!dbClient || !currentUser) return;
+            const isAdmin = currentUser.role === 'admin';
+
+            try {
+                await loadTickets();
+                if (isAdmin) {
+                    await Promise.all([loadAssets(), loadUsers()]);
+                }
+                setDbStatus(true, 'PostgreSQL Terhubung');
+            } catch (err) {
+                console.error('Error memuat data:', err);
+                setDbStatus(false, 'Koneksi Bermasalah');
+                showToast('Gagal Memuat Data', err.message, 'danger');
+            }
+        }
+
+        // ==========================================
+        // REALTIME SUPABASE (NOTIFIKASI OTOMATIS)
+        // ==========================================
+        function stopRealtime() {
+            if (realtimeChannel && dbClient) {
+                dbClient.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+            }
+        }
+
+        function setupRealtime() {
+            if (!dbClient || !currentUser) return;
+            stopRealtime();
+
+            const isAdmin = currentUser.role === 'admin';
+
+            realtimeChannel = dbClient.channel('it-system-realtime')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'it_tickets' }, async (payload) => {
+                    const row = payload.new;
+                    const prev = tickets.find(t => String(t.id) === String(row?.id));
+
+                    if (payload.eventType === 'INSERT' && row) {
+                        if (isAdmin && row.created_by !== currentUser.username) {
+                            showToast('Tiket Baru Masuk!', `${row.ticket_code} (${row.branch || '-'}) - ${row.title}`, 'danger');
+                        }
+                    } else if (payload.eventType === 'UPDATE' && row && prev && prev.status !== row.status) {
+                        const isMine = (row.created_by === currentUser.username) ||
+                            (currentUser.branch && row.branch && row.branch.toLowerCase() === currentUser.branch.toLowerCase());
+                        if (isAdmin || isMine) {
+                            const color = row.status === 'Selesai' ? 'success' : 'warning';
+                            showToast(`Tiket ${row.status}`, `${row.ticket_code} - ${row.title}`, color);
+                        }
+                    }
+                    await loadTickets();
+                });
+
+            if (isAdmin) {
+                realtimeChannel
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'it_assets' }, () => loadAssets())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_users' }, () => loadUsers());
+            }
+
+            realtimeChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    setDbStatus(true, 'PostgreSQL Realtime');
+                }
+            });
+        }
+
+        // ==========================================
+        // KELOLA USER & PERWAKILAN (ADMIN)
+        // ==========================================
+        async function loadUsers() {
+            const { data, error } = await dbClient.from('app_users').select('*').order('id', { ascending: true });
+            if (error) throw error;
+            appUsers = data || [];
+            renderUserList();
+        }
+
+        function renderUserList() {
+            const list = document.getElementById('userListGroup');
+            if (!list) return;
+            list.innerHTML = '';
+
+            appUsers.forEach(u => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+
+                const roleBadge = u.role === 'admin' ? 'bg-primary' : 'bg-info text-dark';
+                const branchText = u.branch ? `<span class="badge bg-light text-dark border ms-1"><i class="bi bi-geo-alt-fill me-1"></i>${escapeHtml(u.branch)}</span>` : '';
+
+                li.innerHTML = `
+                    <div>
+                        <b>${escapeHtml(u.username)}</b>
+                        <span class="badge ${roleBadge} ms-1">${u.role === 'admin' ? 'Admin IT' : 'Perwakilan'}</span>
+                        ${branchText}
+                    </div>
+                `;
+
+                if (currentUser && currentUser.role === 'admin' && u.username !== 'naufal' && u.username !== currentUser.username) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-sm btn-outline-danger';
+                    btn.innerHTML = '<i class="bi bi-trash"></i>';
+                    btn.onclick = () => deleteUser(u.id, u.username);
+                    li.appendChild(btn);
+                }
+                list.appendChild(li);
+            });
+        }
+
+        async function addUser(e) {
+            e.preventDefault();
+            const username = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('newPassword').value;
+            const branch = document.getElementById('newBranch').value.trim();
+            const role = document.getElementById('newRole').value;
+
+            try {
+                const { error } = await dbClient.from('app_users').insert([{ username, password, branch, role }]);
+                if (error) throw error;
+                document.getElementById('formAddUser').reset();
+                await loadUsers();
+                showToast('Berhasil', `Akun "${username}" berhasil ditambahkan.`, 'success');
+            } catch (err) {
+                alert('Gagal menambah user (mungkin username sudah dipakai).\nDetail: ' + err.message);
+            }
+        }
+
+        async function deleteUser(id, username) {
+            if (!confirm(`Hapus akun "${username}"?`)) return;
+            try {
+                const { error } = await dbClient.from('app_users').delete().eq('id', id);
+                if (error) throw error;
+                await loadUsers();
+                showToast('Dihapus', `Akun "${username}" telah dihapus.`, 'warning');
+            } catch (err) {
+                alert('Gagal menghapus user: ' + err.message);
+            }
+        }
+
+        // ==========================================
+        // MANAJEMEN ASET IT (POSTGRESQL + GRUP)
+        // ==========================================
+        async function loadAssets() {
+            const { data, error } = await dbClient.from('it_assets').select('*').order('id', { ascending: false });
+            if (error) throw error;
+            assets = data || [];
+            populateDivisiFilter();
+            updateDashboard();
+            applyAssetFilters();
+        }
+
+        function populateDivisiFilter() {
+            const select = document.getElementById('filterDivisi');
+            const datalist = document.getElementById('branchSuggestions');
+            if (!select) return;
+
+            const currentVal = select.value;
+            const divisions = [...new Set(assets.map(a => (a.division || '').trim()).filter(Boolean))].sort();
+
+            select.innerHTML = '<option value="">Semua Grup / Perwakilan</option>';
+            divisions.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                select.appendChild(opt);
+            });
+            if (divisions.includes(currentVal)) select.value = currentVal;
+
+            if (datalist) {
+                const defaults = ['Sumut PTU', 'Pusat / HO', 'IT', 'Finance', 'HRD'];
+                const merged = [...new Set([...defaults, ...divisions])];
+                datalist.innerHTML = merged.map(v => `<option value="${escapeHtml(v)}">`).join('');
+            }
+        }
+
+        function openAddAssetModal() {
+            document.getElementById('formAset').reset();
+            document.getElementById('assetId').value = '';
+            document.getElementById('modalTitle').innerText = 'Tambah Aset Baru';
+            new bootstrap.Modal(document.getElementById('modalTambah')).show();
+        }
+
+        async function saveAsset(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSaveAsset');
+            btn.disabled = true;
+            btn.innerText = 'Menyimpan...';
+
+            const existingId = document.getElementById('assetId').value.trim();
+
+            const payload = {
+                name: document.getElementById('name').value.trim(),
+                category: document.getElementById('category').value,
+                serial_number: document.getElementById('serialNumber').value.trim(),
+                user_name: document.getElementById('user').value.trim(),
+                division: document.getElementById('division').value.trim() || 'Tanpa Grup',
+                os_version: document.getElementById('osVersion').value.trim(),
+                motherboard: document.getElementById('motherboard').value.trim(),
+                ram: document.getElementById('ram').value.trim(),
+                ssd: document.getElementById('ssd').value.trim(),
+                hdd: document.getElementById('hdd').value.trim(),
+                monitor_brand: document.getElementById('monitorBrand').value.trim(),
+                monitor_size: document.getElementById('monitorSize').value.trim(),
+                status: document.getElementById('status').value,
+                condition_state: document.getElementById('condition').value,
+                price: parseFloat(document.getElementById('price').value) || 0,
+                buy_date: document.getElementById('buyDate').value || '',
+                useful_life: parseInt(document.getElementById('usefulLife').value) || 0,
+                updated_at: new Date().toISOString()
+            };
+
+            try {
+                if (existingId) {
+                    const { error } = await dbClient.from('it_assets').update(payload).eq('id', existingId);
+                    if (error) throw error;
+                    showToast('Tersimpan', `Aset "${payload.name}" diperbarui.`, 'success');
+                } else {
+                    payload.code = 'AST-' + Math.floor(100000 + Math.random() * 900000);
+                    const { error } = await dbClient.from('it_assets').insert([payload]);
+                    if (error) throw error;
+                    showToast('Tersimpan', `Aset "${payload.name}" masuk ke database.`, 'success');
+                }
+
+                bootstrap.Modal.getInstance(document.getElementById('modalTambah')).hide();
+                document.getElementById('formAset').reset();
+                document.getElementById('assetId').value = '';
+                await loadAssets();
+            } catch (err) {
+                console.error(err);
+                alert('Gagal menyimpan aset ke PostgreSQL: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Simpan Data';
+            }
+        }
+
+        function editAsset(id) {
+            const a = assets.find(x => String(x.id) === String(id));
+            if (!a) return;
+
+            document.getElementById('assetId').value = a.id;
+            document.getElementById('name').value = a.name || '';
+            document.getElementById('category').value = a.category || 'Lainnya';
+            document.getElementById('serialNumber').value = a.serial_number || '';
+            document.getElementById('user').value = a.user_name || '';
+            document.getElementById('division').value = a.division || '';
+            document.getElementById('osVersion').value = a.os_version || '';
+            document.getElementById('motherboard').value = a.motherboard || '';
+            document.getElementById('ram').value = a.ram || '';
+            document.getElementById('ssd').value = a.ssd || '';
+            document.getElementById('hdd').value = a.hdd || '';
+            document.getElementById('monitorBrand').value = a.monitor_brand || '';
+            document.getElementById('monitorSize').value = a.monitor_size || '';
+            document.getElementById('status').value = a.status || 'Digunakan';
+            document.getElementById('condition').value = a.condition_state || 'Baik';
+            document.getElementById('price').value = a.price || '';
+            document.getElementById('buyDate').value = a.buy_date || '';
+            document.getElementById('usefulLife').value = a.useful_life || 0;
+
+            document.getElementById('modalTitle').innerText = 'Edit Data Aset';
+            new bootstrap.Modal(document.getElementById('modalTambah')).show();
+        }
+
+        async function deleteAsset(id) {
+            if (!confirm('Yakin ingin menghapus aset ini?')) return;
+            try {
+                const { error } = await dbClient.from('it_assets').delete().eq('id', id);
+                if (error) throw error;
+                await loadAssets();
+                showToast('Terhapus', 'Aset dihapus dari database.', 'warning');
+            } catch (err) {
+                alert('Gagal menghapus aset: ' + err.message);
+            }
+        }
+
+        async function clearAllData() {
+            if (!confirm('PERINGATAN: Hapus SEMUA data aset di database?')) return;
+            try {
+                const { error } = await dbClient.from('it_assets').delete().neq('id', 0);
+                if (error) throw error;
+                await loadAssets();
+                showToast('Reset Berhasil', 'Semua data aset telah dikosongkan.', 'danger');
+            } catch (err) {
+                alert('Gagal reset data: ' + err.message);
+            }
+        }
+
+        function getFilteredAssets() {
+            const search = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+            const division = (document.getElementById('filterDivisi')?.value || '').toLowerCase().trim();
+            const category = document.getElementById('filterKategori')?.value || '';
+            const status = document.getElementById('filterStatus')?.value || '';
+
+            return assets.filter(a => {
+                const matchSearch = !search || [
+                    a.name, a.code, a.serial_number, a.user_name, a.division, a.ram, a.motherboard, a.os_version
+                ].some(v => String(v || '').toLowerCase().includes(search));
+
+                const matchDiv = !division || String(a.division || '').toLowerCase().trim() === division;
+                const matchCat = !category || a.category === category;
+                const matchStatus = !status || a.status === status;
+                return matchSearch && matchDiv && matchCat && matchStatus;
+            });
+        }
+
+        function applyAssetFilters() {
+            const filtered = getFilteredAssets();
+            const isGroupMode = document.getElementById('toggleGroupMode')?.checked;
+            const tableBox = document.getElementById('tableViewContainer');
+            const groupBox = document.getElementById('groupViewContainer');
+
+            if (isGroupMode) {
+                tableBox.classList.add('d-none');
+                groupBox.classList.remove('d-none');
+                renderGroupedAssets(filtered);
+            } else {
+                groupBox.classList.add('d-none');
+                tableBox.classList.remove('d-none');
+                renderTable(filtered);
+            }
+        }
+
+        function buildAssetRowHtml(asset) {
+            const currentValue = calculateDepreciation(asset.price, asset.buy_date, asset.useful_life);
+            let rowStyle = '';
+            let badgeStatus = 'bg-success';
+
+            if (asset.status === 'Rusak') {
+                rowStyle = 'table-danger';
+                badgeStatus = 'bg-danger';
+            } else if (asset.status === 'Perbaikan') {
+                rowStyle = 'table-warning';
+                badgeStatus = 'bg-warning text-dark';
+            } else if (asset.status === 'Tersedia') {
+                badgeStatus = 'bg-info text-dark';
+            }
+
+            const specs = [
+                asset.os_version ? `OS: ${asset.os_version}` : '',
+                asset.motherboard ? `Mobo: ${asset.motherboard}` : '',
+                asset.ram ? `RAM: ${asset.ram}` : '',
+                asset.ssd ? `SSD: ${asset.ssd}` : '',
+                asset.hdd ? `HDD: ${asset.hdd}` : '',
+                (asset.monitor_brand || asset.monitor_size) ? `Mon: ${asset.monitor_brand || ''} ${asset.monitor_size ? `(${asset.monitor_size})` : ''}`.trim() : ''
+            ].filter(Boolean).join(' | ');
+
+            return `
+                <tr class="${rowStyle}">
+                    <td class="ps-3 fw-bold text-primary">${escapeHtml(asset.code)}</td>
+                    <td>
+                        <div class="fw-bold">${escapeHtml(asset.name)}</div>
+                        <span class="badge bg-light text-dark border">${escapeHtml(asset.category)}</span>
+                    </td>
+                    <td>
+                        <div class="fw-bold">${escapeHtml(asset.user_name || '-')}</div>
+                        <small class="text-muted"><i class="bi bi-building me-1"></i>${escapeHtml(asset.division || 'Tanpa Grup')}</small>
+                    </td>
+                    <td>${specs ? `<span class="spec-badge"><i class="bi bi-cpu me-1"></i>${escapeHtml(specs)}</span>` : '<span class="text-muted small">-</span>'}</td>
+                    <td><span class="badge ${badgeStatus}">${escapeHtml(asset.status)}</span></td>
+                    <td class="fw-semibold text-dark">${formatRupiah(currentValue)}</td>
+                    <td class="text-center pe-3">
+                        <div class="action-btns">
+                            <button class="btn btn-sm btn-outline-info" onclick="viewAsset(${asset.id})" title="Detail"><i class="bi bi-eye-fill"></i></button>
+                            <button class="btn btn-sm btn-outline-dark" onclick="showBarcodeModal(${asset.id})" title="Barcode & QR"><i class="bi bi-qr-code"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editAsset(${asset.id})" title="Edit"><i class="bi bi-pencil-fill"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteAsset(${asset.id})" title="Hapus"><i class="bi bi-trash-fill"></i></button>
+                        </div>
+                    </td>
+                </tr>`;
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody');
+            if (!tbody) return;
+            if (!data.length) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">Belum ada data aset yang cocok.</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = data.map(buildAssetRowHtml).join('');
+        }
+
+        function renderGroupedAssets(data) {
+            const container = document.getElementById('groupViewContainer');
+            if (!container) return;
+            if (!data.length) {
+                container.innerHTML = `<div class="card card-custom p-4 text-center text-muted">Tidak ada data aset untuk dikelompokkan.</div>`;
+                return;
+            }
+
+            const groups = {};
+            data.forEach(a => {
+                const key = (a.division || 'Tanpa Grup').trim();
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(a);
+            });
+
+            container.innerHTML = Object.keys(groups).sort().map((groupName, idx) => {
+                const items = groups[groupName];
+                const collapseId = `grpCollapse_${idx}`;
+                return `
+                    <div class="card card-custom mb-3 shadow-sm overflow-hidden">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 group-header" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                            <div>
+                                <i class="bi bi-folder-fill text-primary me-2"></i>
+                                <span class="fw-bold fs-6">${escapeHtml(groupName)}</span>
+                                <span class="badge bg-primary rounded-pill ms-2">${items.length} Aset</span>
+                            </div>
+                            <i class="bi bi-chevron-down text-muted"></i>
+                        </div>
+                        <div id="${collapseId}" class="collapse show">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="ps-3">Kode</th>
+                                            <th>Nama Barang</th>
+                                            <th>Pengguna</th>
+                                            <th>Spesifikasi</th>
+                                            <th>Status</th>
+                                            <th>Nilai Sisa</th>
+                                            <th class="text-center pe-3">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${items.map(buildAssetRowHtml).join('')}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function updateDashboard() {
+            document.getElementById('totalAsetCount').innerText = assets.length;
+            document.getElementById('aktifCount').innerText = assets.filter(a => a.status === 'Digunakan' || a.status === 'Tersedia').length;
+            document.getElementById('perbaikanCount').innerText = assets.filter(a => a.status === 'Perbaikan' || a.status === 'Rusak').length;
+            const total = assets.reduce((sum, a) => sum + calculateDepreciation(a.price, a.buy_date, a.useful_life), 0);
+            document.getElementById('totalNilaiAset').innerText = formatRupiah(total);
+        }
+
+        function viewAsset(id) {
+            const a = assets.find(x => String(x.id) === String(id));
+            if (!a) return;
+            const currentValue = calculateDepreciation(a.price, a.buy_date, a.useful_life);
+            const badgeStatus = a.status === 'Digunakan' ? 'bg-success' :
+                                a.status === 'Tersedia' ? 'bg-info text-dark' :
+                                a.status === 'Perbaikan' ? 'bg-warning text-dark' : 'bg-danger';
+
+            document.getElementById('viewModalContent').innerHTML = `
+                <div class="row g-3">
+                    <div class="col-md-12 border-bottom pb-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-primary fs-6 mb-1">${escapeHtml(a.code)}</span>
+                            <h4 class="fw-bold text-dark mb-0">${escapeHtml(a.name)}</h4>
+                        </div>
+                        <div>
+                            <span class="badge ${badgeStatus} fs-6">${escapeHtml(a.status)}</span>
+                            <span class="badge bg-secondary fs-6 ms-1">${escapeHtml(a.category)}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded h-100 border">
+                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-person-badge me-1"></i> Pengguna & Grup</h6>
+                            <p class="mb-1"><strong>Pengguna:</strong> ${escapeHtml(a.user_name || '-')}</p>
+                            <p class="mb-1"><strong>Grup/Perwakilan:</strong> ${escapeHtml(a.division || '-')}</p>
+                            <p class="mb-0"><strong>Serial Number:</strong> <code>${escapeHtml(a.serial_number || '-')}</code></p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded h-100 border">
+                            <h6 class="fw-bold text-primary mb-2"><i class="bi bi-cash-stack me-1"></i> Finansial & Kondisi</h6>
+                            <p class="mb-1"><strong>Kondisi Fisik:</strong> ${escapeHtml(a.condition_state || '-')}</p>
+                            <p class="mb-1"><strong>Harga Beli:</strong> ${formatRupiah(a.price)}</p>
+                            <p class="mb-1"><strong>Tanggal Pembelian:</strong> ${escapeHtml(a.buy_date || '-')}</p>
+                            <p class="mb-0"><strong>Nilai Sisa:</strong> <span class="fw-bold text-success">${formatRupiah(currentValue)}</span></p>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="p-3 border rounded bg-white">
+                            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-cpu me-1"></i> Rincian Spesifikasi Hardware</h6>
+                            <div class="row g-2 text-dark">
+                                <div class="col-md-4"><strong>OS:</strong><br>${escapeHtml(a.os_version || '-')}</div>
+                                <div class="col-md-4"><strong>Motherboard:</strong><br>${escapeHtml(a.motherboard || '-')}</div>
+                                <div class="col-md-4"><strong>RAM:</strong><br>${escapeHtml(a.ram || '-')}</div>
+                                <div class="col-md-4"><strong>SSD:</strong><br>${escapeHtml(a.ssd || '-')}</div>
+                                <div class="col-md-4"><strong>HDD:</strong><br>${escapeHtml(a.hdd || '-')}</div>
+                                <div class="col-md-4"><strong>Monitor:</strong><br>${escapeHtml(a.monitor_brand || '-')} ${a.monitor_size ? `(${escapeHtml(a.monitor_size)})` : ''}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            new bootstrap.Modal(document.getElementById('modalView')).show();
+        }
+
+        // ==========================================
+        // IMPORT & EKSPOR EXCEL ASET (BATCH AMAN)
+        // ==========================================
+        function processExcelImport() {
+            if (typeof XLSX === 'undefined') return alert('Library Excel gagal dimuat. Periksa koneksi internet.');
+            const fileInput = document.getElementById('excelFileInput');
+            const file = fileInput.files[0];
+            if (!file) return alert('Pilih file Excel terlebih dahulu!');
+
+            const btn = document.getElementById('btnImportExcel');
+            btn.disabled = true;
+            btn.innerText = 'Mengimpor...';
+
+            const reader = new FileReader();
+            reader.onload = async function (e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonResult = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+
+                    const rowsToInsert = [];
+                    jsonResult.forEach(row => {
+                        const namaBarang = row['Nama Barang'] || row['Nama Aset'];
+                        if (namaBarang) {
+                            rowsToInsert.push({
+                                code: String(row['Kode Aset'] || ('AST-' + Math.floor(100000 + Math.random() * 900000))).trim(),
+                                name: String(namaBarang).trim(),
+                                category: String(row['Kategori'] || 'Lainnya').trim(),
+                                serial_number: String(row['Serial Number'] || '-').trim(),
+                                user_name: String(row['Pengguna'] || '-').trim(),
+                                division: String(row['Divisi'] || row['Perwakilan'] || row['Grup'] || row['Grup / Perwakilan'] || 'Tanpa Grup').trim(),
+                                os_version: String(row['OS'] || '-').trim(),
+                                motherboard: String(row['Motherboard'] || '-').trim(),
+                                ram: String(row['RAM'] || '-').trim(),
+                                ssd: String(row['SSD'] || '-').trim(),
+                                hdd: String(row['HDD'] || '-').trim(),
+                                monitor_brand: String(row['Merk Monitor'] || '-').trim(),
+                                monitor_size: String(row['Ukuran Monitor'] || '-').trim(),
+                                status: String(row['Status'] || 'Tersedia').trim(),
+                                condition_state: String(row['Kondisi'] || 'Baik').trim(),
+                                price: parseFloat(row['Harga Beli']) || 0,
+                                buy_date: row['Tanggal Pembelian'] ? String(row['Tanggal Pembelian']) : new Date().toISOString().split('T')[0],
+                                useful_life: parseInt(row['Garansi (Thn)']) || 4
+                            });
+                        }
+                    });
+
+                    if (!rowsToInsert.length) {
+                        alert('Tidak ada baris valid dengan kolom "Nama Barang".');
+                        return;
+                    }
+
+                    // Kirim per batch 50 baris agar input ratusan data 100% masuk
+                    const batchSize = 50;
+                    for (let i = 0; i < rowsToInsert.length; i += batchSize) {
+                        const chunk = rowsToInsert.slice(i, i + batchSize);
+                        const { error } = await dbClient.from('it_assets').insert(chunk);
+                        if (error) throw error;
+                    }
+
+                    bootstrap.Modal.getInstance(document.getElementById('modalImport')).hide();
+                    fileInput.value = '';
+                    await loadAssets();
+                    showToast('Import Berhasil', `${rowsToInsert.length} data aset tersimpan ke database.`, 'success');
+                } catch (err) {
+                    console.error(err);
+                    alert('Gagal import Excel: ' + err.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = 'Proses Import';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function downloadTemplate() {
+            const template = [{
+                "Kode Aset": "AST-1001", "Nama Barang": "PC Office i5", "Kategori": "PC Desktop",
+                "Serial Number": "SN-00192", "Pengguna": "Budi", "Divisi": "Sumut PTU",
+                "OS": "Windows 11", "Motherboard": "ASUS B550M", "RAM": "16 GB", "SSD": "512 GB", "HDD": "1 TB",
+                "Merk Monitor": "LG", "Ukuran Monitor": "24 Inch", "Status": "Digunakan", "Kondisi": "Baik",
+                "Harga Beli": 12000000, "Tanggal Pembelian": "2024-01-15", "Garansi (Thn)": 4
+            }];
+            const ws = XLSX.utils.json_to_sheet(template);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Template");
+            XLSX.writeFile(wb, "Template_Import_Aset.xlsx");
+        }
+
+        function exportToExcel() {
+            const dataToExport = getFilteredAssets();
+            if (!dataToExport.length) return alert('Tidak ada data aset untuk diekspor.');
+            const exportData = dataToExport.map(a => ({
+                'Kode Aset': a.code, 'Nama Barang': a.name, 'Kategori': a.category, 'Serial Number': a.serial_number,
+                'Pengguna': a.user_name, 'Grup / Perwakilan': a.division, 'OS': a.os_version, 'Motherboard': a.motherboard,
+                'RAM': a.ram, 'SSD': a.ssd, 'HDD': a.hdd, 'Merk Monitor': a.monitor_brand, 'Ukuran Monitor': a.monitor_size,
+                'Status': a.status, 'Kondisi': a.condition_state, 'Harga Beli': a.price, 'Tanggal Beli': a.buy_date,
+                'Nilai Sisa': calculateDepreciation(a.price, a.buy_date, a.useful_life)
+            }));
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data Aset");
+            XLSX.writeFile(wb, "Data_Aset_IT.xlsx");
+        }
+
+        // ==========================================
+        // TICKETING IT SUPPORT & NOTIFIKASI
+        // ==========================================
+        async function loadTickets() {
+            const { data, error } = await dbClient.from('it_tickets').select('*').order('created_at', { ascending: false });
+            if (error) throw error;
+            tickets = data || [];
+            populateTicketBranchFilter();
+            renderTicketsTable();
+            updateTicketDashboardAndNotif();
+        }
+
+        function getVisibleTickets() {
+            if (!currentUser) return [];
+            if (currentUser.role === 'admin') return tickets;
+            return tickets.filter(t => {
+                const sameCreator = t.created_by === currentUser.username;
+                const sameBranch = currentUser.branch && t.branch &&
+                    t.branch.toLowerCase().trim() === currentUser.branch.toLowerCase().trim();
+                return sameCreator || sameBranch;
+            });
+        }
+
+        function getFilteredTickets() {
+            const visible = getVisibleTickets();
+            const search = (document.getElementById('tktSearchInput')?.value || '').toLowerCase().trim();
+            const branch = (document.getElementById('tktFilterBranch')?.value || '').toLowerCase().trim();
+            const status = document.getElementById('tktFilterStatus')?.value || '';
+
+            return visible.filter(t => {
+                const matchSearch = !search || [
+                    t.ticket_code, t.reporter, t.branch, t.category, t.title, t.description, t.technician
+                ].some(v => String(v || '').toLowerCase().includes(search));
+                const matchBranch = !branch || String(t.branch || '').toLowerCase().trim() === branch;
+                const matchStatus = !status || t.status === status;
+                return matchSearch && matchBranch && matchStatus;
+            });
+        }
+
+        function populateTicketBranchFilter() {
+            const select = document.getElementById('tktFilterBranch');
+            if (!select) return;
+            const currentVal = select.value;
+            const branches = [...new Set(getVisibleTickets().map(t => (t.branch || '').trim()).filter(Boolean))].sort();
+            select.innerHTML = '<option value="">Semua Perwakilan / Grup</option>';
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                select.appendChild(opt);
+            });
+            if (branches.includes(currentVal)) select.value = currentVal;
+        }
+
+        function openNewTicketModal() {
+            document.getElementById('formTicket').reset();
+            if (currentUser) {
+                document.getElementById('tktReporter').value = currentUser.username;
+                if (currentUser.branch) {
+                    document.getElementById('tktBranch').value = currentUser.branch;
+                }
+            }
+            new bootstrap.Modal(document.getElementById('modalTicket')).show();
+        }
+
+        async function submitTicket(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitTicket');
+            btn.disabled = true;
+            btn.innerText = 'Mengirim...';
+
+            const now = new Date();
+            const ymd = now.toISOString().slice(0, 10).replace(/-/g, '');
+            const payload = {
+                ticket_code: `TKT-${ymd}-${Math.floor(1000 + Math.random() * 9000)}`,
+                created_by: currentUser ? currentUser.username : 'guest',
+                reporter: document.getElementById('tktReporter').value.trim(),
+                branch: document.getElementById('tktBranch').value.trim(),
+                category: document.getElementById('tktCategory').value,
+                priority: document.getElementById('tktPriority').value,
+                title: document.getElementById('tktTitle').value.trim(),
+                description: document.getElementById('tktDescription').value.trim(),
+                status: 'Belum Dikerjakan',
+                technician: '',
+                resolution_note: ''
+            };
+
+            try {
+                const { error } = await dbClient.from('it_tickets').insert([payload]);
+                if (error) throw error;
+                bootstrap.Modal.getInstance(document.getElementById('modalTicket')).hide();
+                await loadTickets();
+                showToast('Tiket Terkirim', `Kode Tiket: ${payload.ticket_code}`, 'success');
+            } catch (err) {
+                alert('Gagal mengirim tiket: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send-fill me-1"></i> Kirim Tiket';
+            }
+        }
+
+        function renderTicketsTable() {
+            const tbody = document.getElementById('ticketTableBody');
+            if (!tbody) return;
+            const list = getFilteredTickets();
+
+            if (!list.length) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">Belum ada tiket pengajuan IT.</td></tr>`;
+                return;
+            }
+
+            const isAdmin = currentUser && currentUser.role === 'admin';
+
+            tbody.innerHTML = list.map(t => {
+                let rowClass = '';
+                let statusBadge = 'bg-danger';
+                if (t.status === 'Sedang Diproses') {
+                    rowClass = 'table-warning';
+                    statusBadge = 'bg-warning text-dark';
+                } else if (t.status === 'Selesai') {
+                    rowClass = 'table-success';
+                    statusBadge = 'bg-success';
+                }
+
+                const prioBadge = t.priority === 'Tinggi (Urgent)' ? 'bg-danger' :
+                                  t.priority === 'Rendah' ? 'bg-secondary' : 'bg-info text-dark';
+
+                return `
+                    <tr class="${rowClass}">
+                        <td class="ps-3">
+                            <div class="fw-bold text-primary">${escapeHtml(t.ticket_code)}</div>
+                            <small class="text-muted">${formatDateTime(t.created_at)}</small>
+                        </td>
+                        <td>
+                            <div class="fw-bold">${escapeHtml(t.reporter)}</div>
+                            <span class="badge bg-light text-dark border"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(t.branch || '-')}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary mb-1">${escapeHtml(t.category)}</span>
+                            <div class="fw-semibold">${escapeHtml(t.title)}</div>
+                            <small class="text-muted d-block text-truncate" style="max-width: 260px;">${escapeHtml(t.description)}</small>
+                        </td>
+                        <td><span class="badge ${prioBadge}">${escapeHtml(t.priority)}</span></td>
+                        <td><span class="badge ${statusBadge}">${escapeHtml(t.status)}</span></td>
+                        <td>
+                            <div class="small"><strong>IT:</strong> ${escapeHtml(t.technician || '-')}</div>
+                            ${t.completed_at ? `<small class="text-success">Selesai: ${formatDateTime(t.completed_at)}</small>` : `<small class="text-muted">${escapeHtml(t.resolution_note || 'Menunggu penanganan')}</small>`}
+                        </td>
+                        <td class="text-center pe-3">
+                            <div class="action-btns">
+                                <button class="btn btn-sm btn-outline-primary" onclick="openTicketDetail(${t.id})">
+                                    <i class="bi bi-${isAdmin ? 'tools' : 'eye-fill'}"></i> ${isAdmin ? 'Proses' : 'Detail'}
+                                </button>
+                                ${isAdmin ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteTicket(${t.id})" title="Hapus"><i class="bi bi-trash"></i></button>` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+            }).join('');
+        }
+
+        function updateTicketDashboardAndNotif() {
+            const visible = getVisibleTickets();
+            const pending = visible.filter(t => t.status === 'Belum Dikerjakan');
+            const processing = visible.filter(t => t.status === 'Sedang Diproses');
+            const done = visible.filter(t => t.status === 'Selesai');
+
+            document.getElementById('tktTotalCount').innerText = visible.length;
+            document.getElementById('tktPendingCount').innerText = pending.length;
+            document.getElementById('tktProcessCount').innerText = processing.length;
+            document.getElementById('tktDoneCount').innerText = done.length;
+
+            const activeCount = pending.length + processing.length;
+            const notifBadge = document.getElementById('notifBadge');
+            const tabBadge = document.getElementById('ticketPendingTabBadge');
+
+            if (activeCount > 0) {
+                notifBadge.innerText = activeCount;
+                notifBadge.classList.remove('d-none');
+                tabBadge.innerText = pending.length > 0 ? `${pending.length} Baru` : `${processing.length} Proses`;
+                tabBadge.classList.remove('d-none');
+            } else {
+                notifBadge.classList.add('d-none');
+                tabBadge.classList.add('d-none');
+            }
+
+            const container = document.getElementById('notifListContainer');
+            if (!container) return;
+
+            const buildSection = (title, color, icon, list) => {
+                if (!list.length) return `
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-${color}"><i class="bi ${icon} me-1"></i>${title} (0)</h6>
+                        <div class="small text-muted ps-3">Tidak ada tiket.</div>
+                    </div>`;
+                return `
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-${color}"><i class="bi ${icon} me-1"></i>${title} (${list.length})</h6>
+                        <div class="list-group">
+                            ${list.slice(0, 10).map(t => `
+                                <div class="list-group-item notif-item p-2" onclick="openTicketFromNotif(${t.id})">
+                                    <div class="d-flex justify-content-between">
+                                        <strong class="small text-primary">${escapeHtml(t.ticket_code)} • ${escapeHtml(t.branch || '-')}</strong>
+                                        <small class="text-muted">${formatDateTime(t.created_at)}</small>
+                                    </div>
+                                    <div class="small fw-semibold">${escapeHtml(t.title)}</div>
+                                    <div class="small text-muted">Pelapor: ${escapeHtml(t.reporter)}</div>
+                                </div>`).join('')}
+                        </div>
+                    </div>`;
+            };
+
+            container.innerHTML =
+                buildSection('Belum Dikerjakan', 'danger', 'bi-exclamation-circle-fill', pending) +
+                buildSection('Sedang Diproses', 'warning', 'bi-hourglass-split', processing) +
+                buildSection('Sudah Selesai', 'success', 'bi-check-circle-fill', done);
+        }
+
+        function openTicketFromNotif(id) {
+            const notifModal = bootstrap.Modal.getInstance(document.getElementById('modalNotif'));
+            if (notifModal) notifModal.hide();
+            switchTab('tickets');
+            openTicketDetail(id);
+        }
+
+        function openTicketDetail(id) {
+            const t = tickets.find(x => String(x.id) === String(id));
+            if (!t) return;
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            const statusColor = t.status === 'Selesai' ? 'success' : t.status === 'Sedang Diproses' ? 'warning text-dark' : 'danger';
+
+            document.getElementById('ticketDetailContent').innerHTML = `
+                <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+                    <div>
+                        <span class="badge bg-primary mb-1">${escapeHtml(t.ticket_code)}</span>
+                        <h5 class="fw-bold mb-1">${escapeHtml(t.title)}</h5>
+                        <small class="text-muted">Dilaporkan: ${formatDateTime(t.created_at)} oleh <strong>${escapeHtml(t.reporter)}</strong> (${escapeHtml(t.branch || '-')})</small>
+                    </div>
+                    <span class="badge bg-${statusColor} fs-6">${escapeHtml(t.status)}</span>
+                </div>
+
+                <div class="p-3 bg-light rounded border mb-3">
+                    <div class="row g-2 mb-2 small">
+                        <div class="col-6"><strong>Kategori:</strong> ${escapeHtml(t.category)}</div>
+                        <div class="col-6"><strong>Prioritas:</strong> ${escapeHtml(t.priority)}</div>
+                    </div>
+                    <strong>Detail Masalah:</strong>
+                    <p class="mb-0 mt-1" style="white-space: pre-wrap;">${escapeHtml(t.description)}</p>
+                </div>
+
+                ${isAdmin ? `
+                    <form onsubmit="updateTicketStatus(event, ${t.id})" class="p-3 border rounded bg-white">
+                        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-wrench-adjustable me-1"></i>Update Penanganan IT Support</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Status Pengerjaan</label>
+                                <select id="updTktStatus" class="form-select fw-bold">
+                                    <option value="Belum Dikerjakan" ${t.status === 'Belum Dikerjakan' ? 'selected' : ''}>Belum Dikerjakan</option>
+                                    <option value="Sedang Diproses" ${t.status === 'Sedang Diproses' ? 'selected' : ''}>Sedang Diproses</option>
+                                    <option value="Selesai" ${t.status === 'Selesai' ? 'selected' : ''}>Selesai</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Nama Teknisi IT</label>
+                                <input type="text" id="updTktTech" class="form-control" value="${escapeHtml(t.technician || currentUser.username)}" placeholder="Nama Teknisi">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Catatan Penyelesaian / Tindakan</label>
+                                <textarea id="updTktNote" class="form-control" rows="3" placeholder="Contoh: Ganti kabel LAN & setting IP selesai">${escapeHtml(t.resolution_note || '')}</textarea>
+                            </div>
+                            <div class="col-12 text-end">
+                                <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Tutup</button>
+                                <button type="submit" class="btn btn-success fw-bold"><i class="bi bi-check-lg me-1"></i>Simpan Update</button>
+                            </div>
+                        </div>
+                    </form>
+                ` : `
+                    <div class="p-3 border rounded bg-white">
+                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-info-circle me-1"></i>Informasi Penanganan IT</h6>
+                        <p class="mb-1"><strong>Teknisi IT:</strong> ${escapeHtml(t.technician || 'Belum ditugaskan')}</p>
+                        <p class="mb-1"><strong>Catatan IT:</strong> ${escapeHtml(t.resolution_note || 'Menunggu pengecekan tim IT')}</p>
+                        <p class="mb-0"><strong>Waktu Selesai:</strong> ${formatDateTime(t.completed_at)}</p>
+                    </div>
+                    <div class="text-end mt-3">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                    </div>
+                `}
+            `;
+            new bootstrap.Modal(document.getElementById('modalTicketDetail')).show();
+        }
+
+        async function updateTicketStatus(e, id) {
+            e.preventDefault();
+            const status = document.getElementById('updTktStatus').value;
+            const technician = document.getElementById('updTktTech').value.trim();
+            const resolution_note = document.getElementById('updTktNote').value.trim();
+
+            const updateData = {
+                status,
+                technician,
+                resolution_note,
+                completed_at: status === 'Selesai' ? new Date().toISOString() : null
+            };
+
+            try {
+                const { error } = await dbClient.from('it_tickets').update(updateData).eq('id', id);
+                if (error) throw error;
+                bootstrap.Modal.getInstance(document.getElementById('modalTicketDetail')).hide();
+                await loadTickets();
+                showToast('Tiket Diperbarui', `Status diubah menjadi "${status}".`, 'success');
+            } catch (err) {
+                alert('Gagal update tiket: ' + err.message);
+            }
+        }
+
+        async function deleteTicket(id) {
+            if (!confirm('Hapus tiket ini dari laporan?')) return;
+            try {
+                const { error } = await dbClient.from('it_tickets').delete().eq('id', id);
+                if (error) throw error;
+                await loadTickets();
+                showToast('Terhapus', 'Tiket berhasil dihapus.', 'warning');
+            } catch (err) {
+                alert('Gagal menghapus tiket: ' + err.message);
+            }
+        }
+
+        function exportTicketsToExcel() {
+            const list = getFilteredTickets();
+            if (!list.length) return alert('Tidak ada data tiket untuk diekspor.');
+
+            const rows = list.map((t, idx) => ({
+                'No': idx + 1,
+                'Kode Tiket': t.ticket_code,
+                'Tanggal Lapor': formatDateTime(t.created_at),
+                'Pelapor': t.reporter,
+                'Perwakilan / Grup': t.branch || '-',
+                'Kategori': t.category,
+                'Prioritas': t.priority,
+                'Judul Kendala': t.title,
+                'Deskripsi Masalah': t.description,
+                'Status': t.status,
+                'Teknisi IT': t.technician || '-',
+                'Catatan Penanganan': t.resolution_note || '-',
+                'Tanggal Selesai': formatDateTime(t.completed_at)
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan Tiket IT");
+            const dateTag = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `Laporan_Tiket_IT_${dateTag}.xlsx`);
+        }
+
+        // ==========================================
+        // BARCODE, QR CODE & PUBLIC SCAN
+        // ==========================================
+        function showBarcodeModal(id) {
+            const a = assets.find(x => String(x.id) === String(id));
+            if (!a) return;
+
+            document.getElementById('barcodeAssetName').innerText = a.name;
+            document.getElementById('barcodeAssetUser').innerText = `User: ${a.user_name || '-'} (${a.division || '-'}) | S/N: ${a.serial_number || '-'}`;
+            document.getElementById('barcodeAssetCode').innerText = a.code;
+
+            JsBarcode("#barcodeCanvas", a.code, { format: "CODE128", width: 2, height: 45, displayValue: true });
+
+            const baseUrl = window.location.href.split('?')[0];
+            const queryParams = new URLSearchParams({
+                code: a.code || '', name: a.name || '', cat: a.category || '',
+                user: a.user_name || '', div: a.division || '', sn: a.serial_number || '',
+                os: a.os_version || '', mobo: a.motherboard || '', ram: a.ram || '',
+                ssd: a.ssd || '', hdd: a.hdd || '',
+                mon: `${a.monitor_brand || ''} ${a.monitor_size || ''}`.trim(),
+                status: a.status || '', cond: a.condition_state || ''
+            });
+
+            document.getElementById('qrcodeCanvas').innerHTML = '';
+            new QRCode(document.getElementById('qrcodeCanvas'), {
+                text: `${baseUrl}?${queryParams.toString()}`,
+                width: 120,
+                height: 120
+            });
+
+            new bootstrap.Modal(document.getElementById('modalBarcode')).show();
+        }
+
+        function printBarcode() {
+            const content = document.getElementById('printableArea').innerHTML;
+            const win = window.open('', '', 'width=500,height=600');
+            win.document.write(`<html><head><title>Cetak Label</title></head><body style="text-align:center;font-family:sans-serif;padding:20px;">${content}</body></html>`);
+            win.document.close();
+            win.focus();
+            win.print();
+            win.close();
+        }
+
+        function checkScanUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            if (!code) return;
+
+            const a = {
+                code,
+                name: urlParams.get('name') || 'Aset IT',
+                category: urlParams.get('cat') || '-',
+                user: urlParams.get('user') || '-',
+                division: urlParams.get('div') || '-',
+                serialNumber: urlParams.get('sn') || '-',
+                osVersion: urlParams.get('os') || '-',
+                motherboard: urlParams.get('mobo') || '-',
+                ram: urlParams.get('ram') || '-',
+                ssd: urlParams.get('ssd') || '-',
+                hdd: urlParams.get('hdd') || '-',
+                monitorBrand: urlParams.get('mon') || '-',
+                status: urlParams.get('status') || 'Aktif'
+            };
+
+            const badgeStatus = a.status === 'Digunakan' ? 'bg-success' :
+                                a.status === 'Tersedia' ? 'bg-info text-dark' :
+                                a.status === 'Perbaikan' ? 'bg-warning text-dark' : 'bg-danger';
+
+            document.getElementById('publicScanModalContent').innerHTML = `
+                <div class="mb-3">
+                    <span class="badge bg-primary fs-6 px-3 py-1 mb-2">${escapeHtml(a.code)}</span>
+                    <h4 class="fw-bold text-dark mb-1">${escapeHtml(a.name)}</h4>
+                    <span class="badge ${badgeStatus} fs-6">${escapeHtml(a.status)}</span>
+                    <span class="badge bg-secondary fs-6 ms-1">${escapeHtml(a.category)}</span>
+                </div>
+                <div class="card bg-light border-0 mb-3 text-start">
+                    <div class="card-body p-3 small">
+                        <h6 class="fw-bold text-primary mb-2">Pengguna & Perwakilan</h6>
+                        <div><strong>User:</strong> ${escapeHtml(a.user)}</div>
+                        <div><strong>Grup/Perwakilan:</strong> ${escapeHtml(a.division)}</div>
+                        <div><strong>S/N:</strong> <code>${escapeHtml(a.serialNumber)}</code></div>
+                    </div>
+                </div>
+                <div class="card border-0 bg-light text-start mb-3">
+                    <div class="card-body p-3 small">
+                        <h6 class="fw-bold text-primary mb-2">Spesifikasi Hardware</h6>
+                        <div class="row g-2">
+                            <div class="col-6"><strong>OS:</strong> ${escapeHtml(a.osVersion)}</div>
+                            <div class="col-6"><strong>Mobo:</strong> ${escapeHtml(a.motherboard)}</div>
+                            <div class="col-6"><strong>RAM:</strong> ${escapeHtml(a.ram)}</div>
+                            <div class="col-6"><strong>SSD:</strong> ${escapeHtml(a.ssd)}</div>
+                            <div class="col-6"><strong>HDD:</strong> ${escapeHtml(a.hdd)}</div>
+                            <div class="col-6"><strong>Monitor:</strong> ${escapeHtml(a.monitorBrand)}</div>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-primary w-100" onclick="window.location.href=window.location.pathname">
+                    Masuk Ke Aplikasi Utama
+                </button>`;
+            new bootstrap.Modal(document.getElementById('modalPublicScan')).show();
+        }
+
+        checkAuth();
+        checkScanUrl();
+    </script>
+</body>
+</html>
