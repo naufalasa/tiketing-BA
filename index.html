@@ -1433,18 +1433,25 @@
                         return;
                     }
 
-                    // Kirim per batch 50 baris agar input ratusan data 100% masuk
+                    // Saring jika di dalam 1 file Excel ada Kode Aset yang sama
+                    const uniqueRows = Array.from(
+                        new Map(rowsToInsert.map(item => [item.code, item])).values()
+                    );
+
+                    // Upsert per batch 50 baris: Kode Aset sama = timpa/update, baru = tambah
                     const batchSize = 50;
-                    for (let i = 0; i < rowsToInsert.length; i += batchSize) {
-                        const chunk = rowsToInsert.slice(i, i + batchSize);
-                        const { error } = await dbClient.from('it_assets').insert(chunk);
+                    for (let i = 0; i < uniqueRows.length; i += batchSize) {
+                        const chunk = uniqueRows.slice(i, i + batchSize);
+                        const { error } = await dbClient
+                            .from('it_assets')
+                            .upsert(chunk, { onConflict: 'code' });
                         if (error) throw error;
                     }
 
                     bootstrap.Modal.getInstance(document.getElementById('modalImport')).hide();
                     fileInput.value = '';
                     await loadAssets();
-                    showToast('Import Berhasil', `${rowsToInsert.length} data aset tersimpan ke database.`, 'success');
+                    showToast('Import Berhasil', `${uniqueRows.length} data aset tersimpan/diperbarui di database.`, 'success');
                 } catch (err) {
                     console.error(err);
                     alert('Gagal import Excel: ' + err.message);
